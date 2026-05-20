@@ -1,1 +1,118 @@
+import streamlit as st
+import numpy as np
+import random
+import matplotlib.pyplot as plt
 
+# -----------------------------
+# TITLE
+# -----------------------------
+st.title("📦 Inventory Management using Reinforcement Learning")
+9
+# -----------------------------
+# SIDEBAR INPUTS
+# -----------------------------
+st.sidebar.header("Settings")
+
+MAX_STOCK = st.sidebar.slider("Max Stock", 10, 100, 50)
+MAX_ORDER = st.sidebar.slider("Max Order", 5, 50, 20)
+EPISODES = st.sidebar.slider("Episodes", 100, 1000, 300)
+
+HOLDING_COST = st.sidebar.number_input("Holding Cost", value=1)
+STOCKOUT_PENALTY = st.sidebar.number_input("Stockout Penalty", value=5)
+SELL_PRICE = st.sidebar.number_input("Selling Price", value=10)
+COST_PRICE = st.sidebar.number_input("Cost Price", value=5)
+
+# -----------------------------
+# BUILT-IN DEMAND DATASET
+# -----------------------------
+demand_list = [
+    12, 18, 25, 10, 20, 15, 30,
+    22, 17, 14, 28, 19, 23, 16, 21,
+    26, 13, 24, 18, 29, 11, 27, 20,
+    15, 22, 19, 30, 17, 25, 14
+]
+
+st.write("📊 Using built-in demand dataset")
+
+# -----------------------------
+# RUN BUTTON
+# -----------------------------
+if st.button("Run Simulation"):
+
+    Q = np.zeros((MAX_STOCK + 1, MAX_ORDER + 1))
+
+    alpha = 0.1
+    gamma = 0.9
+    epsilon = 0.2
+
+    profits = []
+
+    # -----------------------------
+    # REWARD FUNCTION
+    # -----------------------------
+    def get_reward(stock, order, demand):
+        stock = stock + order
+        stock = max(0, min(stock, MAX_STOCK))
+
+        sold = min(stock, demand)
+
+        revenue = sold * SELL_PRICE
+        cost = order * COST_PRICE
+        holding = (stock - sold) * HOLDING_COST
+        penalty = max(0, demand - stock) * STOCKOUT_PENALTY
+
+        reward = revenue - cost - holding - penalty
+
+        next_stock = stock - sold
+        next_stock = max(0, min(next_stock, MAX_STOCK))
+
+        return reward, next_stock
+
+    # -----------------------------
+    # TRAINING
+    # -----------------------------
+    for episode in range(EPISODES):
+        stock = random.randint(0, MAX_STOCK)
+        total_profit = 0
+
+        for demand in demand_list:
+
+            if random.uniform(0, 1) < epsilon:
+                action = random.randint(0, MAX_ORDER)
+            else:
+                action = np.argmax(Q[stock])
+
+            reward, next_stock = get_reward(stock, action, demand)
+
+            Q[stock][action] = Q[stock][action] + alpha * (
+                reward + gamma * np.max(Q[next_stock]) - Q[stock][action]
+            )
+
+            stock = int(max(0, min(next_stock, MAX_STOCK)))
+            total_profit += reward
+
+        profits.append(total_profit)
+
+    # -----------------------------
+    # POLICY OUTPUT
+    # -----------------------------
+    st.subheader("📊 Learned Policy")
+
+    for stock in range(0, MAX_STOCK + 1, 5):
+        best_action = np.argmax(Q[stock])
+        st.write(f"Stock: {stock} → Order: {best_action}")
+
+    # -----------------------------
+    # GRAPH
+    # -----------------------------
+    st.subheader("📈 Profit Improvement Graph")
+
+    fig, ax = plt.subplots()
+    ax.plot(profits)
+    ax.set_xlabel("Episodes")
+    ax.set_ylabel("Total Profit")
+    ax.set_title("Profit vs Episodes")
+
+    st.pyplot(fig)
+
+    st.success("Simulation Completed!")
